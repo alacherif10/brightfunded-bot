@@ -16,7 +16,6 @@ PAIRS = {
     "EURJPY=X": {"name": "EURJPY", "pip": 0.01,   "pip_value": 6.7,  "spread": 1.5},
 }
 
-# London window: 09:00-10:59 UK time
 ALLOWED_HOURS = {9, 10}
 
 # State storage
@@ -33,7 +32,6 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 
 def send_telegram(message):
-    """Send a Telegram message. Falls back to console print if no token."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print(f"[TELEGRAM - no creds] {message}")
         return False
@@ -46,6 +44,8 @@ def send_telegram(message):
             "parse_mode": "Markdown",
         }
         r = requests.post(url, json=payload, timeout=10)
+        if r.status_code != 200:
+            print(f"[TELEGRAM] Failed: {r.status_code} {r.text}")
         return r.status_code == 200
     except Exception as e:
         print(f"Telegram send failed: {e}")
@@ -70,7 +70,6 @@ def _get_supabase():
 
 
 def load_state():
-    """Load state from Supabase if configured, else local JSON file."""
     if USE_SUPABASE:
         try:
             sb = _get_supabase()
@@ -79,7 +78,7 @@ def load_state():
                 if response.data:
                     return {"alerted": response.data[0]["alerted"] or {}}
         except Exception as e:
-            print(f"Supabase load error: {e}. Falling back to file.")
+            print(f"Supabase load error: {e}")
 
     if os.path.exists(STATE_FILE):
         try:
@@ -91,7 +90,6 @@ def load_state():
 
 
 def save_state(state):
-    """Save state to Supabase if configured, else local JSON file."""
     if USE_SUPABASE:
         try:
             sb = _get_supabase()
@@ -99,7 +97,7 @@ def save_state(state):
                 sb.table("bot_state").update({"alerted": state["alerted"]}).eq("id", 1).execute()
                 return
         except Exception as e:
-            print(f"Supabase save error: {e}. Falling back to file.")
+            print(f"Supabase save error: {e}")
 
     try:
         with open(STATE_FILE, "w") as f:
@@ -112,7 +110,6 @@ def save_state(state):
 #  HELPERS
 # ============================================================
 def get_uk_hour(ts):
-    """Approximate UK hour. BST (Apr-Oct) = UTC+1, GMT = UTC+0."""
     month = ts.month
     offset = 1 if 4 <= month <= 10 else 0
     return (ts.hour + offset) % 24
@@ -132,7 +129,6 @@ def add_atr(df, period=14):
 #  SIGNAL DETECTION
 # ============================================================
 def check_pair(ticker, meta):
-    """Check one pair for a London-session breakout. Returns alert dict or None."""
     print(f"  Checking {meta['name']}...")
     try:
         df = yf.download(ticker, period="10d", interval="1h",
