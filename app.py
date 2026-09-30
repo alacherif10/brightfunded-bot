@@ -22,7 +22,7 @@ scheduler.add_job(
     run_scanner,
     'cron',
     day_of_week='mon-fri',
-    hour='9-10',
+    hour='8-9',
     minute='0,15,30,45',
     id='london_scanner',
     replace_existing=True,
