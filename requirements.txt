@@ -1,0 +1,7 @@
+flask
+apscheduler
+pytz
+yfinance
+pandas
+requests
+supabase

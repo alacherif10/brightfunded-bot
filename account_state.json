@@ -1,0 +1,11 @@
+{
+  "initial_balance": 1000.0,
+  "equity": 1000.0,
+  "daily_start_equity": 1000.0,
+  "high_water_mark": 1000.0,
+  "trailing_locked": false,
+  "last_date": "2026-09-30",
+  "trading_days": [
+    "2026-09-30"
+  ]
+}
