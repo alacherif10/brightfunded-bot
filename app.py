@@ -2,36 +2,53 @@ from flask import Flask, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 import pytz
-import live_scanner  # Your existing scanner script
+import os
 
 app = Flask(__name__)
 
+import live_scanner
+
+
 def run_scanner():
-    """Wrapper to run the scanner and log output."""
-    print(f"[{datetime.now()}] Running London session scanner...")
+    print(f"[SCHEDULER] {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S UTC')} — running scanner")
     try:
         live_scanner.main()
     except Exception as e:
-        print(f"Scanner error: {e}")
+        print(f"[SCHEDULER] Scanner error: {e}")
 
-# Configure scheduler (London time = UTC in winter, UTC+1 in summer)
-# Adjust the hours based on the current season.
-# Winter (Nov-Mar): 09:00-10:59 UTC  -> hour='9-10'
-# Summer (Apr-Oct): 08:00-09:59 UTC  -> hour='8-9'
+
 scheduler = BackgroundScheduler(timezone=pytz.UTC)
 scheduler.add_job(
     run_scanner,
     'cron',
     day_of_week='mon-fri',
-    hour='9-10',      # <-- CHANGE TO '8-9' DURING SUMMER (Apr-Oct)
-    minute='0,15,30,45'
+    hour='9-10',
+    minute='0,15,30,45',
+    id='london_scanner',
+    replace_existing=True,
 )
 scheduler.start()
 
+
 @app.route('/')
 def health():
-    """Health check endpoint for UptimeRobot."""
-    return jsonify(status="alive", time=datetime.now().isoformat())
+    return jsonify(
+        status="alive",
+        time=datetime.now(pytz.UTC).isoformat(),
+        scheduler_running=scheduler.running,
+        jobs=[str(j) for j in scheduler.get_jobs()],
+    )
+
+
+@app.route('/run')
+def manual_run():
+    try:
+        run_scanner()
+        return jsonify(status="ok", message="Scanner ran successfully")
+    except Exception as e:
+        return jsonify(status="error", message=str(e)), 500
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
