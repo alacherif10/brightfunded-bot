@@ -70,41 +70,61 @@ def _get_supabase():
 
 
 def load_state():
+    """Load state. Try Supabase first, then file. Return whichever is 'newer'."""
+    supabase_state = None
+    file_state = None
+
     if USE_SUPABASE:
         try:
             sb = _get_supabase()
             if sb:
                 response = sb.table("bot_state").select("alerted").eq("id", 1).execute()
                 if response.data:
-                    return {"alerted": response.data[0]["alerted"] or {}}
+                    supabase_state = {"alerted": response.data[0]["alerted"] or {}}
+                    print(f"[STATE] Loaded from Supabase: {supabase_state['alerted']}", flush=True)
         except Exception as e:
-            print(f"Supabase load error: {e}")
+            print(f"[STATE] Supabase load FAILED: {e}", flush=True)
 
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"alerted": {}}
+                file_state = json.load(f)
+            print(f"[STATE] Loaded from file: {file_state.get('alerted', {})}", flush=True)
+        except Exception as e:
+            print(f"[STATE] File load FAILED: {e}", flush=True)
 
+    # Prefer whichever has more alerts (safer)
+    if supabase_state and file_state:
+        sb_count = len(supabase_state.get("alerted", {}))
+        file_count = len(file_state.get("alerted", {}))
+        return supabase_state if sb_count >= file_count else file_state
+    return supabase_state or file_state or {"alerted": {}}
 
 def save_state(state):
+    """Save state to Supabase if configured, ALWAYS also write to local file."""
+    saved_to_supabase = False
+
     if USE_SUPABASE:
         try:
             sb = _get_supabase()
             if sb:
-                sb.table("bot_state").update({"alerted": state["alerted"]}).eq("id", 1).execute()
-                return
+                result = sb.table("bot_state").update(
+                    {"alerted": state["alerted"]}
+                ).eq("id", 1).execute()
+                print(f"[STATE] Supabase update response: {result.data}", flush=True)
+                saved_to_supabase = True
         except Exception as e:
-            print(f"Supabase save error: {e}")
+            print(f"[STATE] Supabase save FAILED: {e}", flush=True)
 
+    # ALWAYS write to local file as backup
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=2)
+        print(f"[STATE] Saved to {STATE_FILE}: {state['alerted']}", flush=True)
     except Exception as e:
-        print(f"File save error: {e}")
+        print(f"[STATE] File save FAILED: {e}", flush=True)
 
+    print(f"[STATE] Supabase saved: {saved_to_supabase}", flush=True)
 
 # ============================================================
 #  HELPERS
